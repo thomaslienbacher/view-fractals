@@ -4,6 +4,7 @@ use interpolation::lerp;
 
 pub trait ColorEncode {
     fn encode(&self) -> u32;
+    fn from_u32(color: u32) -> LinSrgb;
 }
 
 impl ColorEncode for LinSrgb {
@@ -13,6 +14,14 @@ impl ColorEncode for LinSrgb {
         let b = (self.blue * 255.0) as u8;
 
         (255 << 24) | ((r as u32) << 16) | ((g as u32) << 8) | b as u32
+    }
+
+    fn from_u32(color: u32) -> LinSrgb {
+        let r = (color & 0x00FF0000) >> 16;
+        let g = (color & 0x0000FF00) >> 8;
+        let b = (color & 0x000000FF);
+
+        LinSrgb::new(r as f32 / 255., g as f32 / 255., b as f32 / 255.)
     }
 }
 

@@ -1,13 +1,16 @@
 mod fractal;
+mod text;
 
 use minifb::{Key, Window, WindowOptions, MouseButton, MouseMode, Scale, KeyRepeat};
 use crate::fractal::*;
+use crate::text::*;
 use palette::{LinSrgb, Hsv, Gradient};
 use rayon::prelude::*;
 use num::complex::Complex64;
 use std::time::{SystemTime};
+use fontdue::FontSettings;
 
-const WIDTH: usize = 1200;
+const WIDTH: usize = 1920;
 const HEIGHT: usize = WIDTH / 16 * 9;
 
 fn main() {
@@ -18,19 +21,21 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X1,
+            scale: Scale::FitScreen,
             ..WindowOptions::default()
         },
     ).unwrap_or_else(|e| {
         panic!("Error: {}", e);
     });
 
+    let painter = TextPainter::new();
     let bounds = Bounds::new(-2.1, 2.1, WIDTH as f64 / HEIGHT as f64);
     let mut julia = JuliaFractal::new(bounds);
     let mut max_iterations = 50;
     let mut delta_time = 0.;
 
     let grad = Gradient::new(vec![
+        Hsv::from(LinSrgb::new(0.2 as f32, 0. as f32, 0. as f32)),
         Hsv::from(LinSrgb::new(1. as f32, 0. as f32, 0. as f32)),
         Hsv::from(LinSrgb::new(0. as f32, 1. as f32, 0. as f32)),
         Hsv::from(LinSrgb::new(0. as f32, 0. as f32, 1. as f32)),
@@ -58,6 +63,8 @@ fn main() {
                 *v = 0;
             };
         });
+
+        painter.paint_string(&mut buffer, WIDTH, 3, 3,&format!("{:?}", julia), 20, 0.5);
 
         let time_passed = SystemTime::now().duration_since(start).unwrap();
         delta_time = time_passed.as_secs_f64();
@@ -88,8 +95,6 @@ fn main() {
                 julia.add.im *= 2. * 2.;
             }
         }
-
-        println!("{:?}", julia);
 
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
