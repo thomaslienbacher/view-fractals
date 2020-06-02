@@ -27,8 +27,8 @@ impl ColorEncode for LinSrgb {
 
 #[derive(Debug)]
 pub struct Bounds {
-    xbounds: (f64, f64),
-    ybounds: (f64, f64),
+    pub xbounds: (f64, f64),
+    pub ybounds: (f64, f64),
 }
 
 impl Bounds {

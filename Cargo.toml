@@ -3,6 +3,7 @@ name = "view-fractals"
 version = "0.1.0"
 authors = ["Thomas Lienbacher <lienbacher.tom@gmail.com>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 num = "0.2"
@@ -12,3 +13,4 @@ interpolation = "0.2"
 palette = "0.5"
 rayon = "1.3"
 fontdue = "0.0.4"
+ocl = "0.19"
