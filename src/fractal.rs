@@ -19,7 +19,7 @@ impl ColorEncode for LinSrgb {
     fn from_u32(color: u32) -> LinSrgb {
         let r = (color & 0x00FF0000) >> 16;
         let g = (color & 0x0000FF00) >> 8;
-        let b = (color & 0x000000FF);
+        let b = color & 0x000000FF;
 
         LinSrgb::new(r as f32 / 255., g as f32 / 255., b as f32 / 255.)
     }

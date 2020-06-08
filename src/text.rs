@@ -1,7 +1,6 @@
 use fontdue::*;
 use palette::{LinSrgb};
 use super::fractal::ColorEncode;
-use std::cmp::min;
 
 pub struct TextPainter {
     font: fontdue::Font
@@ -51,7 +50,7 @@ impl TextPainter {
 
             for (i, b) in bitmap.iter().enumerate() {
                 let x = (i % metrics.width) + local_x;
-                let mut y: i32 = (i as i32 / metrics.width as i32) + y as i32 + (max_y as i32 - metrics.bounds.ymax as i32);
+                let y: i32 = (i as i32 / metrics.width as i32) + y as i32 + (max_y as i32 - metrics.bounds.ymax as i32);
                 let c = *b as f32 / 255.;
                 let a = LinSrgb::from((c, c, c));
                 let b = LinSrgb::from_u32(buffer[x + y as usize * buffer_stride]);
