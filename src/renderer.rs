@@ -4,6 +4,9 @@ use rayon::prelude::*;
 use num::complex::Complex64;
 use ocl::{ProQue, Buffer, Kernel};
 use ocl::prm::Double4;
+use std::path::Path;
+use std::fs::File;
+use std::io::BufWriter;
 
 pub trait Renderer {
     fn name(&self) -> String;
@@ -197,3 +200,52 @@ impl Renderer for OpenClRenderer {
         self.gpu_color_lookup_buffer.write(&color_lookup_buffer).enq();
     }
 }
+
+pub struct PNGSaver {
+    internal: OpenClRenderer
+}
+
+impl PNGSaver {
+    const WIDTH: usize = crate::WIDTH * 9;
+    const HEIGHT: usize = crate::HEIGHT * 9;
+    const MAX_ITERATIONS: u32 = 1000;
+
+    pub fn new(julia: &JuliaFractal) -> PNGSaver {
+        PNGSaver {
+            internal: OpenClRenderer::new(Self::WIDTH, Self::HEIGHT, julia, Self::MAX_ITERATIONS)
+        }
+    }
+
+    pub fn save(&mut self, julia: &JuliaFractal) {
+        println!("Starting to save PNG...");
+        let path = Path::new("render.png");
+        let file = File::create(path).unwrap();
+        let ref mut w = BufWriter::new(file);
+
+        let mut encoder = png::Encoder::new(w, Self::WIDTH as u32, Self::HEIGHT as u32); // Width is 2 pixels and height is 1.
+        encoder.set_color(png::ColorType::RGB);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+
+        let mut buffer: Vec<u32> = vec![0; Self::WIDTH * Self::HEIGHT];
+        self.internal.render(julia, Self::MAX_ITERATIONS, &mut buffer, Self::WIDTH, Self::HEIGHT);
+
+        println!("Preparing data...");
+        let data: Vec<u8> = {
+            let mut d: Vec<Vec<u8>> = buffer.iter().map(|u| {
+                let r = (*u & 0x00FF0000) >> 16;
+                let g = (*u & 0x0000FF00) >> 8;
+                let b = *u & 0x000000FF;
+
+                vec![r as u8, g as u8, b as u8]
+            }).collect();
+
+            d.into_iter().flatten().collect()
+        };
+
+        println!("Writing data...");
+        writer.write_image_data(&data[..]).unwrap();
+        println!("Finished writing to PNG!");
+    }
+}
+

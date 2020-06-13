@@ -7,8 +7,10 @@ use crate::fractal::*;
 use crate::text::*;
 use num::complex::Complex64;
 use std::time::{SystemTime};
-use crate::renderer::{CpuRenderer, Renderer, OpenClRenderer};
+use crate::renderer::{CpuRenderer, Renderer, OpenClRenderer, PNGSaver};
 use std::cmp::max;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 const TITLE: &'static str = "View Julia Fractals - ESC to exit";
 const WIDTH: usize = 1600;
@@ -17,6 +19,7 @@ const FONT_SIZE: usize = (WIDTH / 110) + 1;
 
 fn main() {
     let mut renderer: Box<dyn Renderer> = Box::new(CpuRenderer::new());
+    let render_lock = Arc::new(Mutex::new(()));
 
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
     let mut window = Window::new(
@@ -34,7 +37,7 @@ fn main() {
     let painter = TextPainter::new();
     let bounds = Bounds::new(-2.1, 2.1, WIDTH as f64 / HEIGHT as f64);
     let mut julia = JuliaFractal::new(bounds);
-    let mut max_iterations = 670;
+    let mut max_iterations = 400;
     let mut delta_time: f64;
 
     println!("{:?}", julia);
@@ -53,12 +56,12 @@ fn main() {
         window.set_title(format!("{} DT: {}", TITLE, delta_time).as_ref());
 
         if window.is_key_pressed(Key::W, KeyRepeat::Yes) {
-            max_iterations += max((20.0 * delta_time) as u32, 1);
+            max_iterations += max((60.0 * delta_time) as u32, 1);
             renderer.on_max_iterations_change(max_iterations);
         }
         if window.is_key_pressed(Key::S, KeyRepeat::Yes) {
             if max_iterations > 2 {
-                max_iterations -= max((20.0 * delta_time) as u32, 1);
+                max_iterations -= max((60.0 * delta_time) as u32, 1);
                 renderer.on_max_iterations_change(max_iterations);
             }
         }
@@ -82,11 +85,26 @@ fn main() {
                 julia.add.im *= 2. * 2.;
                 renderer.on_add_change(&julia.add);
             }
+            if window.is_key_down(Key::U) {
+                let ymax = f64::max(julia.bounds.ybounds.0.abs(), julia.bounds.ybounds.1.abs());
+                julia.bounds = Bounds::new(-ymax, ymax, WIDTH as f64 / HEIGHT as f64);
+                renderer.on_bounds_change(&julia.bounds);
+            }
             if window.is_key_down(Key::Key1) {
                 renderer = Box::new(CpuRenderer::new());
             }
             if window.is_key_down(Key::Key2) {
                 renderer = Box::new(OpenClRenderer::new(WIDTH, HEIGHT, &julia, max_iterations));
+            }
+            if window.is_key_down(Key::Key3) {
+                let j = julia.clone();
+                let lock = render_lock.clone();
+                thread::spawn(move || {
+                    match lock.try_lock() {
+                        Ok(t) => PNGSaver::new(&j).save(&j),
+                        _ => {}
+                    }
+                });
             }
         }
 

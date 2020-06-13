@@ -25,7 +25,7 @@ impl ColorEncode for LinSrgb {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Bounds {
     pub xbounds: (f64, f64),
     pub ybounds: (f64, f64),
@@ -68,7 +68,7 @@ impl Bounds {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JuliaFractal {
     pub bounds: Bounds,
     pub add: Complex64,
