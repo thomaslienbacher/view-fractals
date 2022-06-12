@@ -11,9 +11,10 @@ use crate::renderer::{CpuRenderer, Renderer, OpenClRenderer, PNGSaver};
 use std::cmp::max;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 const TITLE: &'static str = "View Julia Fractals - ESC to exit";
-const WIDTH: usize = 1600;
+const WIDTH: usize = 1200;
 const HEIGHT: usize = WIDTH / 16 * 9;
 const FONT_SIZE: usize = (WIDTH / 110) + 1;
 
@@ -27,7 +28,10 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X1,
+            scale: Scale::X2,
+            borderless: false,
+            title: true,
+            resize: true,
             ..WindowOptions::default()
         },
     ).unwrap_or_else(|e| {
@@ -37,12 +41,12 @@ fn main() {
     let painter = TextPainter::new();
     let bounds = Bounds::new(-2.1, 2.1, WIDTH as f64 / HEIGHT as f64);
     let mut julia = JuliaFractal::new(bounds);
-    let mut max_iterations = 400;
+    let mut max_iterations = 20;
     let mut delta_time: f64;
 
     println!("{:?}", julia);
 
-    while window.is_open() && !window.is_key_released(Key::Escape) {
+    while window.is_open() && !window.is_key_released(Key::Escape) | !window.is_key_released(Key::Q) {
         let start = SystemTime::now();
 
         renderer.render(&julia, max_iterations, &mut buffer, WIDTH, HEIGHT);
