@@ -99,6 +99,6 @@ impl JuliaFractal {
             z = self.f(z);
         }
 
-        return max_iterations as f64;
+        max_iterations as f64
     }
 }

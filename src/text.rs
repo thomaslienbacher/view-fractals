@@ -3,7 +3,7 @@ use palette::{LinSrgb};
 use super::fractal::ColorEncode;
 
 pub struct TextPainter {
-    font: fontdue::Font
+    font: fontdue::Font,
 }
 
 impl TextPainter {
@@ -15,7 +15,7 @@ impl TextPainter {
         }
     }
 
-    pub fn paint_string(&self, buffer: &mut Vec<u32>, buffer_stride: usize, x: usize, y: usize, str: &str, size: usize, alpha: f32) {
+    pub fn paint_string(&self, buffer: &mut [u32], buffer_stride: usize, x: usize, y: usize, str: &str, size: usize, alpha: f32) {
         let mut sum_x = 0;
         let mut max_y = 0;
         let mut min_y = 0;
@@ -35,7 +35,7 @@ impl TextPainter {
 
         // draw black box
         for x in (x - 2)..(sum_x + x + 2) {
-            for y in (y - 2)..(y + max_y + min_y.abs() as usize + 2) {
+            for y in (y - 2)..(y + max_y + min_y.unsigned_abs() as usize + 2) {
                 let c = LinSrgb::new(0., 0., 0.) +
                     LinSrgb::from_u32(buffer[x + y * buffer_stride]) * (1. - alpha);
                 buffer[x + y * buffer_stride] = c.encode();

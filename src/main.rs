@@ -2,7 +2,7 @@ mod fractal;
 mod text;
 mod renderer;
 
-use minifb::{Key, Window, WindowOptions, MouseButton, MouseMode, Scale, KeyRepeat};
+use minifb::{Key, Window, WindowOptions, MouseButton, MouseMode, Scale, KeyRepeat, CursorStyle};
 use crate::fractal::*;
 use crate::text::*;
 use num::complex::Complex64;
@@ -11,42 +11,42 @@ use crate::renderer::{CpuRenderer, Renderer, OpenClRenderer, PNGSaver};
 use std::cmp::max;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 
-const TITLE: &'static str = "View Julia Fractals - ESC to exit";
-const WIDTH: usize = 1200;
+const TITLE: &str = "View Julia Fractals - ESC to exit";
+const WIDTH: usize = 1900;
 const HEIGHT: usize = WIDTH / 16 * 9;
 const FONT_SIZE: usize = (WIDTH / 110) + 1;
 
 fn main() {
-    let mut renderer: Box<dyn Renderer> = Box::new(CpuRenderer::new());
-    let render_lock = Arc::new(Mutex::new(()));
-
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
     let mut window = Window::new(
         TITLE,
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X2,
+            scale: Scale::X1,
             borderless: false,
             title: true,
-            resize: true,
+            resize: false,
             ..WindowOptions::default()
         },
     ).unwrap_or_else(|e| {
         panic!("Error: {}", e);
     });
 
-    let painter = TextPainter::new();
+    window.set_cursor_style(CursorStyle::Crosshair);
+
+    let mut max_iterations = 20;
     let bounds = Bounds::new(-2.1, 2.1, WIDTH as f64 / HEIGHT as f64);
     let mut julia = JuliaFractal::new(bounds);
-    let mut max_iterations = 20;
+    let mut renderer: Box<dyn Renderer> = Box::new(OpenClRenderer::new(WIDTH, HEIGHT, &julia, max_iterations));
+    let render_lock = Arc::new(Mutex::new(()));
+    let painter = TextPainter::new();
     let mut delta_time: f64;
 
     println!("{:?}", julia);
 
-    while window.is_open() && !window.is_key_released(Key::Escape) | !window.is_key_released(Key::Q) {
+    while window.is_open() && !(window.is_key_down(Key::Escape) | window.is_key_down(Key::Q)) {
         let start = SystemTime::now();
 
         renderer.render(&julia, max_iterations, &mut buffer, WIDTH, HEIGHT);
@@ -60,14 +60,22 @@ fn main() {
         window.set_title(format!("{} DT: {}", TITLE, delta_time).as_ref());
 
         if window.is_key_pressed(Key::W, KeyRepeat::Yes) {
-            max_iterations += max((60.0 * delta_time) as u32, 1);
+            let mut mult = 1;
+            if window.is_key_down(Key::LeftShift) {
+                mult = 4;
+            }
+
+            max_iterations += max((60.0 * delta_time) as u32, 1) * mult;
             renderer.on_max_iterations_change(max_iterations);
         }
-        if window.is_key_pressed(Key::S, KeyRepeat::Yes) {
-            if max_iterations > 2 {
-                max_iterations -= max((60.0 * delta_time) as u32, 1);
-                renderer.on_max_iterations_change(max_iterations);
+        if window.is_key_pressed(Key::S, KeyRepeat::Yes) && max_iterations > 2 {
+            let mut mult = 1;
+            if window.is_key_down(Key::LeftShift) {
+                mult = 4;
             }
+
+            max_iterations -= max((60.0 * delta_time) as u32, 1) * mult;
+            renderer.on_max_iterations_change(max_iterations);
         }
 
         if let Some((a, b)) = window.get_mouse_pos(MouseMode::Discard) {
@@ -105,7 +113,7 @@ fn main() {
                 let lock = render_lock.clone();
                 thread::spawn(move || {
                     match lock.try_lock() {
-                        Ok(t) => PNGSaver::new(&j).save(&j),
+                        Ok(_) => PNGSaver::new(&j).save(&j),
                         _ => {}
                     }
                 });

@@ -3,7 +3,7 @@ use palette::{LinSrgb, Hsv, Gradient};
 use rayon::prelude::*;
 use num::complex::Complex64;
 use ocl::{ProQue, Buffer, Kernel};
-use ocl::prm::Double4;
+use ocl::prm::Float4;
 use std::path::Path;
 use std::fs::File;
 use std::io::BufWriter;
@@ -18,11 +18,9 @@ pub trait Renderer {
 
 fn get_color_gradient() -> Gradient<Hsv> {
     Gradient::new(vec![
-        Hsv::from(LinSrgb::new(0.2 as f32, 0. as f32, 0. as f32)),
-        Hsv::from(LinSrgb::new(1. as f32, 0. as f32, 0. as f32)),
-        Hsv::from(LinSrgb::new(0. as f32, 1. as f32, 0. as f32)),
-        Hsv::from(LinSrgb::new(0. as f32, 0. as f32, 1. as f32)),
-        Hsv::from(LinSrgb::new(1. as f32, 1. as f32, 1. as f32))
+        Hsv::new(0.0, 1.0, 1.0),
+        Hsv::new(180.0, 1.0, 1.0),
+        Hsv::new(280.0, 1.0, 1.0),
     ])
 }
 
@@ -49,8 +47,7 @@ impl Renderer for CpuRenderer {
 
             let g = {
                 let m = max_iterations - 1;
-                let p = (j as f32) / m as f32;
-                p
+                (j as f32) / m as f32
             };
 
             if j != max_iterations as f64 {
@@ -80,20 +77,20 @@ impl OpenClRenderer {
         #define WIDTH {}
         #define HEIGHT {}
 
-        double my_lerp(double a, double b, double w) {{
+        float my_lerp(float a, float b, float w) {{
             return a + w * (b - a);
         }}
 
-        __kernel void julia(__global __read_only  unsigned int* input, __global unsigned int* output, double re, double im,
-            double4 bounds, __global __read_only unsigned int* color_lookup) {{
+        __kernel void julia(__global  unsigned int* input, __global unsigned int* output, float re, float im,
+            float4 bounds, __global unsigned int* color_lookup) {{
 
             unsigned int x = input[get_global_id(0)] % WIDTH;
             unsigned int y = input[get_global_id(0)] / WIDTH;
-            double dx = ((double) x) / (double) WIDTH;
-            double dy = ((double) y) / (double) HEIGHT;
+            float dx = ((float) x) / (float) WIDTH;
+            float dy = ((float) y) / (float) HEIGHT;
 
-            double zr = my_lerp(bounds.x, bounds.y, dx);
-            double zi = my_lerp(bounds.z, bounds.w, dy);
+            float zr = my_lerp(bounds.x, bounds.y, dx);
+            float zi = my_lerp(bounds.z, bounds.w, dy);
 
             output[get_global_id(0)] = 0;
 
@@ -103,8 +100,8 @@ impl OpenClRenderer {
                     return;
                 }}
 
-                double tmpr = zr * zr - zi * zi;
-                double tmpi = 2 * zr * zi;
+                float tmpr = zr * zr - zi * zi;
+                float tmpi = 2 * zr * zi;
 
                 zr = tmpr + re;
                 zi = tmpi + im;
@@ -129,20 +126,21 @@ impl OpenClRenderer {
 
             v
         };
-        gpu_input_buffer.write(&input_buffer).enq();
+        gpu_input_buffer.write(&input_buffer).enq().unwrap();
 
         let gpu_output_buffer = pro_que.create_buffer::<u32>().unwrap();
 
         let gpu_color_lookup_buffer = pro_que.create_buffer::<u32>().unwrap();
         let color_lookup_buffer = OpenClRenderer::calculate_color_lookup_buffer(max_iterations as usize);
-        gpu_color_lookup_buffer.write(&color_lookup_buffer).enq();
+        gpu_color_lookup_buffer.write(&color_lookup_buffer).enq().unwrap();
 
         let kernel = pro_que.kernel_builder("julia")
             .arg(&gpu_input_buffer)
             .arg(&gpu_output_buffer)
-            .arg(julia.add.re)
-            .arg(julia.add.im)
-            .arg(&Double4::new(julia.bounds.xbounds.0, julia.bounds.xbounds.1, julia.bounds.ybounds.0, julia.bounds.ybounds.1))
+            .arg(julia.add.re as f32)
+            .arg(julia.add.im as f32)
+            .arg(&Float4::new(julia.bounds.xbounds.0 as f32, julia.bounds.xbounds.1 as f32,
+                              julia.bounds.ybounds.0 as f32, julia.bounds.ybounds.1 as f32))
             .arg(&gpu_color_lookup_buffer)
             .build().unwrap();
 
@@ -158,11 +156,17 @@ impl OpenClRenderer {
 
         let mut v = vec![0; max_iterations + 1];
         v[0] = max_iterations as u32;
-        for (i, c) in (&mut v).into_iter().skip(1).enumerate() {
+
+        const GRADIENT_LOOP: usize = 40;
+
+        for (i, c) in v.iter_mut().skip(1).enumerate() {
             let g = {
-                let m = max_iterations - 1;
-                let p = i as f32 / m as f32;
-                p
+                if max_iterations < GRADIENT_LOOP {
+                    let m = max_iterations - 1;
+                    i as f32 / m as f32
+                } else {
+                    (i % GRADIENT_LOOP) as f32 / GRADIENT_LOOP as f32
+                }
             };
 
             if i != max_iterations {
@@ -182,27 +186,28 @@ impl Renderer for OpenClRenderer {
     }
 
     fn render(&mut self, _julia: &JuliaFractal, _max_iterations: u32, window_buffer: &mut Vec<u32>, _width: usize, _height: usize) {
-        unsafe { self.kernel.enq(); }
-        self.gpu_output_buffer.read(window_buffer).enq();
+        unsafe { self.kernel.enq().unwrap(); }
+        self.gpu_output_buffer.read(window_buffer).enq().unwrap();
     }
 
     fn on_add_change(&mut self, add: &Complex64) {
-        self.kernel.set_arg(2, add.re);
-        self.kernel.set_arg(3, add.im);
+        self.kernel.set_arg(2, add.re as f32).unwrap();
+        self.kernel.set_arg(3, add.im as f32).unwrap();
     }
 
     fn on_bounds_change(&mut self, bounds: &Bounds) {
-        self.kernel.set_arg(4, &Double4::new(bounds.xbounds.0, bounds.xbounds.1, bounds.ybounds.0, bounds.ybounds.1));
+        self.kernel.set_arg(4, &Float4::new(bounds.xbounds.0 as f32, bounds.xbounds.1 as f32,
+                                            bounds.ybounds.0 as f32, bounds.ybounds.1 as f32)).unwrap();
     }
 
     fn on_max_iterations_change(&mut self, max_iterations: u32) {
         let color_lookup_buffer = OpenClRenderer::calculate_color_lookup_buffer(max_iterations as usize);
-        self.gpu_color_lookup_buffer.write(&color_lookup_buffer).enq();
+        self.gpu_color_lookup_buffer.write(&color_lookup_buffer).enq().unwrap();
     }
 }
 
 pub struct PNGSaver {
-    internal: OpenClRenderer
+    internal: OpenClRenderer,
 }
 
 impl PNGSaver {
@@ -220,10 +225,10 @@ impl PNGSaver {
         println!("Starting to save PNG...");
         let path = Path::new("render.png");
         let file = File::create(path).unwrap();
-        let ref mut w = BufWriter::new(file);
+        let mut w = &mut BufWriter::new(file);
 
         let mut encoder = png::Encoder::new(w, Self::WIDTH as u32, Self::HEIGHT as u32); // Width is 2 pixels and height is 1.
-        encoder.set_color(png::ColorType::RGB);
+        encoder.set_color(png::ColorType::Rgb);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header().unwrap();
 
@@ -232,7 +237,7 @@ impl PNGSaver {
 
         println!("Preparing data...");
         let data: Vec<u8> = {
-            let mut d: Vec<Vec<u8>> = buffer.iter().map(|u| {
+            let d: Vec<Vec<u8>> = buffer.iter().map(|u| {
                 let r = (*u & 0x00FF0000) >> 16;
                 let g = (*u & 0x0000FF00) >> 8;
                 let b = *u & 0x000000FF;
